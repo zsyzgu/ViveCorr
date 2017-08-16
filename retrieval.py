@@ -17,37 +17,18 @@ from fastdtw import fastdtw
 dim = 72
 known = 27
 unknown = 45
-terms = 1
+terms = 10
 
 class Retrieval:
       def __init__(self, motions):
             self.N = len(motions)
             self.train = motions
-            self.coef = np.zeros((known, unknown))
-            self.match = [[] for i in range(unknown)]
+            self.coef = np.zeros(known)
+            self.imp = []
             self.start()
 
       def dist(self, arr_0, arr_1):
             return math.sqrt(sum((arr_0 - arr_1) ** 2))
-
-      def caln_coef(self):
-            for x in range(known):
-                  for y in range(unknown):
-                        X = []
-                        Y = []
-                        for i in range(self.N):
-                              n = len(self.train[i].timestamp)
-                              for j in range(n):
-                                    X.append(self.train[i].X_pos[j, x : x + 1])
-                                    Y.append(self.train[i].Y_pos[j, y])
-                        linreg = LinearRegression()
-                        reg = linreg.fit(X, Y)
-                        self.coef[x, y] = linreg.score(X, Y)
-            for y in range(unknown):
-                  threshold = np.sort(self.coef[:, y])[-terms]
-                  for x in range(known):
-                        if self.coef[x, y] >= threshold:
-                              self.match[y].append(x)
 
       def start(self):
             self.dtw = [-np.ones(len(self.train[i].X_pos)) for i in range(self.N)]
@@ -79,27 +60,9 @@ class Retrieval:
                               t = j
                   self.dtw_t[i] = t
 
-            replay = np.mean([self.train[i].Y_pos[self.dtw_t[i]] for i in range(self.N)], axis = 0)
-            Y_pos = replay.copy()
+            Y_pos = np.mean([self.train[i].Y_pos[self.dtw_t[i]] for i in range(self.N)], axis = 0)
 
-            for y in range(unknown):
-                  train_X = []
-                  train_Y = []
-                  x = self.match[y]
-                  for i in range(self.N):
-                        t = self.dtw_t[i]
-                        T = len(self.train[i].X_pos)
-                        for dt in range(-4, 5):
-                              if (t + dt >= 0 and t + dt < T):
-                                    train_X.append(self.train[i].X_pos[t + dt][x])
-                                    train_Y.append(self.train[i].Y_pos[t + dt][y])
-                        #train_X.append(self.train[i].X_pos[t][x : x + 1])
-                        #train_Y.append(self.train[i].Y_pos[t][y])
-                  linreg = LinearRegression()
-                  reg = linreg.fit(train_X, train_Y)
-                  Y_pos[y] = reg.predict([X_pos[x]])[0]
-
-            return replay, Y_pos
+            return Y_pos
 
 def caln_error(test, predict):
       n = len(test)
@@ -111,29 +74,24 @@ def caln_error(test, predict):
       return error
 
 motions = load_motions('data/gyz731_vec.txt')['knee_lift_right']
-model = Retrieval(motions[0 : 5])
-model.caln_coef()
+model = Retrieval(motions[0 : 1])
 
-for id in range(5, 10):
-      test = motions[id]
+for k in range(1, 10):
+      test = motions[k]
 
       model.start()
       predict = test.copy()
-      replay = np.array(predict.Y_pos)
       T = len(test.timestamp)
       for i in range(T):
-            replay[i], predict.Y_pos[i] = model.fit(test.X_pos[i])
+            predict.Y_pos[i] = model.fit(test.X_pos[i])
 
-      error_replay = caln_error(test.Y_pos, replay)
       error = caln_error(test.Y_pos, predict.Y_pos)
-      print id, error_replay, error
+      print error
 
-      plt.clf()
-      plt.subplot(3, 1, 1)
+      plt.clf()å
+      plt.subplot(2, 1, 1)
       plt.plot(test.Y_pos)
-      plt.subplot(3, 1, 2)
-      plt.plot(replay)
-      plt.subplot(3, 1, 3)
+      plt.subplot(2, 1, 2)
       plt.plot(predict.Y_pos)
       plt.show()
       #plt.savefig('pic/' + str(id) + '.jpg')
