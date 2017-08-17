@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.cross_validation import train_test_split
 from hmmlearn import hmm
-from motions_io import load_motions
+from motions_io import load_motions, Motion
 import pandas as pd
 from pandas.tools.plotting import lag_plot
 from statsmodels.tsa.api import VAR
@@ -20,31 +20,33 @@ unknown = 45
 terms = 10
 
 class Retrieval:
-      def __init__(self, motions):
-            self.N = len(motions)
-            self.train = motions
-            self.coef = np.zeros(known)
-            self.imp = []
-            self.start()
+      def __init__(self):
+            pass
+
+      def set_train(self, train):
+            self.train = train
+
+      def set_origin(self, origin):
+            self.origin = origin
 
       def dist(self, arr_0, arr_1):
             return math.sqrt(sum((arr_0 - arr_1) ** 2))
 
-      def start(self):
-            self.dtw = [-np.ones(len(self.train[i].X_pos)) for i in range(self.N)]
-            self.dtw_t = np.zeros(self.N, dtype = int)
+      def init_dtw(self):
+            self.dtw = [-np.ones(len(self.origin[i].timestamp)) for i in range(len(self.origin))]
+            self.match = np.zeros(len(self.origin), dtype = int)
 
-      def fit(self, X_pos):
-            for i in range(self.N):
-                  pos = self.train[i].X_pos
+      def fit_curr(self, X_pos):
+            for i in range(len(self.origin)):
+                  pos = self.origin[i].X_pos
                   dtw = self.dtw[i]
-                  n = len(pos)
-                  new_dtw = -np.ones(n)
+                  T = len(self.origin[i].timestamp)
+                  new_dtw = -np.ones(T)
                   if (dtw[0] == -1):
                         new_dtw[0] = self.dist(pos[0], X_pos)
                   else:
                         new_dtw[0] = dtw[0] + self.dist(pos[0], X_pos)
-                        for j in range(1, n):
+                        for j in range(1, T):
                               new_dtw[j] = new_dtw[j - 1]
                               if (dtw[j - 1] != -1):
                                     new_dtw[j] = min(new_dtw[j], dtw[j - 1])
@@ -55,49 +57,54 @@ class Retrieval:
                               new_dtw[j] += self.dist(pos[j], X_pos)
                   self.dtw[i] = dtw = new_dtw
                   t = 0
-                  for j in range(1, n):
+                  for j in range(1, T):
                         if (dtw[j] != -1 and dtw[j] < dtw[t]):
                               t = j
-                  self.dtw_t[i] = t
+                  self.match[i] = t
 
-            Y_pos = np.mean([self.train[i].Y_pos[self.dtw_t[i]] for i in range(self.N)], axis = 0)
+            t = int(np.mean(self.match))
+            Y_pos = np.mean([self.train[i].Y_pos[t] for i in range(len(self.train))], axis = 0)
 
             return Y_pos
 
-def caln_error(test, predict):
-      n = len(test)
-      m = np.shape(test)[1]
-      total = 0
-      for i in range(n):
-            total += np.mean([math.sqrt(sum((test[i][j : j + 3] - predict[i][j : j + 3]) ** 2)) for j in range(0, m, 3)])
-      error = total / n
-      return error
+      def caln_error(self, test, predict):
+            n = len(test)
+            m = np.shape(test)[1]
+            total = 0
+            for i in range(n):
+                  total += np.mean([math.sqrt(sum((test[i][j : j + 3] - predict[i][j : j + 3]) ** 2)) for j in range(0, m, 3)])
+            error = total / n
+            return error
+
+      def fit(self, test):
+            self.init_dtw()
+            predict = Motion()
+            T = len(test.timestamp)
+            predict.Y_pos = [[] for i in range(T)]
+            predict.Y_start = test.Y_start
+            for i in range(T):
+                  predict.Y_pos[i] = self.fit_curr(test.X_pos[i])
+
+            error = self.caln_error(test.Y_pos, predict.Y_pos)
+            print error
+
+            plt.clf()
+            plt.subplot(2, 1, 1)
+            plt.plot(test.Y_pos)
+            plt.subplot(2, 1, 2)
+            plt.plot(predict.Y_pos)
+            plt.show()
 
 motions = load_motions('data/gyz731_vec.txt')['knee_lift_right']
-model = Retrieval(motions[0 : 1])
+model = Retrieval()
+model.set_train(motions[0 : 30])
+model.set_origin(motions[30 : 35])
+for i in range(35, 38):
+      model.fit(motions[i])
 
-for k in range(1, 10):
-      test = motions[k]
-
-      model.start()
-      predict = test.copy()
-      T = len(test.timestamp)
-      for i in range(T):
-            predict.Y_pos[i] = model.fit(test.X_pos[i])
-
-      error = caln_error(test.Y_pos, predict.Y_pos)
-      print error
-
-      plt.clf()å
-      plt.subplot(2, 1, 1)
-      plt.plot(test.Y_pos)
-      plt.subplot(2, 1, 2)
-      plt.plot(predict.Y_pos)
-      plt.show()
-      #plt.savefig('pic/' + str(id) + '.jpg')
-      #test.output('pic/' + str(id) + '_gt.txt')
-      #predict.output('pic/' + str(id) + '.txt')
-
+#plt.savefig('pic/' + str(id) + '.jpg')
+#test.output('pic/' + str(id) + '_gt.txt')
+#predict.output('pic/' + str(id) + '.txt')
 #predict.output('predict.txt')
 
 '''
