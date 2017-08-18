@@ -13,6 +13,7 @@ import scipy.signal as signal
 from sklearn.linear_model import LinearRegression 
 from scipy.spatial.distance import euclidean
 from fastdtw import fastdtw
+from sklearn.cross_decomposition import CCA
 
 dim = 72
 known = 27
@@ -35,6 +36,7 @@ class Retrieval:
       def init_dtw(self):
             self.dtw = [-np.ones(len(self.origin[i].timestamp)) for i in range(len(self.origin))]
             self.match = np.zeros(len(self.origin), dtype = int)
+
 
       def fit_curr(self, X_pos):
             for i in range(len(self.origin)):
@@ -78,6 +80,7 @@ class Retrieval:
 
       def fit(self, test):
             self.init_dtw()
+
             predict = Motion()
             T = len(test.timestamp)
             predict.Y_pos = [[] for i in range(T)]
@@ -95,12 +98,11 @@ class Retrieval:
             plt.plot(predict.Y_pos)
             plt.show()
 
-motions = load_motions('data/gyz731_vec.txt')['knee_lift_right']
+motions = load_motions('data/gyz.txt')['knee_lift_right']
 model = Retrieval()
-model.set_train(motions[0 : 30])
-model.set_origin(motions[30 : 35])
-for i in range(35, 38):
-      model.fit(motions[i])
+model.set_train(motions[0 : 20])
+model.set_origin(motions[20 : 25])
+model.fit(motions[25])
 
 #plt.savefig('pic/' + str(id) + '.jpg')
 #test.output('pic/' + str(id) + '_gt.txt')
